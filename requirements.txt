@@ -1,0 +1,12 @@
+streamlit
+langchain
+langchain-community
+langchain-text-splitters
+
+faiss-cpu
+sentence-transformers
+transformers
+torch
+
+pypdf
+numpy==1.26.4
