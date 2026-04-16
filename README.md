@@ -122,9 +122,8 @@ streamlit run app.py
 
 ---
 
-## 💼 Resume Description
 
-**RAG-based PDF Chatbot (Offline)**
+## RAG-based PDF Chatbot (Offline)
 
 * Built a Retrieval-Augmented Generation system using LangChain and FAISS
 * Implemented semantic search with sentence-transformer embeddings
