@@ -1,7 +1,8 @@
 import streamlit as st
 import os
+import tempfile
 
-# 🔥 Fix SSL issue
+# 🔥 Fix SSL issue (safe)
 os.environ.pop("SSL_CERT_FILE", None)
 
 from langchain_community.document_loaders import PyPDFLoader
@@ -13,7 +14,6 @@ from langchain.chains import ConversationalRetrievalChain
 from transformers import pipeline
 
 st.set_page_config(page_title="Free RAG Chatbot", layout="wide")
-
 st.title("📄 Chat with your PDFs (FREE RAG)")
 
 # -------------------------
@@ -32,13 +32,16 @@ DB_PATH = "faiss_db"
 # -------------------------
 def load_docs(files):
     docs = []
-    for file in files:
-        file_path = file.name
-        with open(file_path, "wb") as f:
-            f.write(file.read())
 
-        loader = PyPDFLoader(file_path)
+    for file in files:
+        # Use temp file (avoids overwrite bugs)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(file.read())
+            tmp_path = tmp.name
+
+        loader = PyPDFLoader(tmp_path)
         docs.extend(loader.load())
+
     return docs
 
 # -------------------------
@@ -61,7 +64,11 @@ def get_vectorstore(texts=None):
 
     # Load existing DB
     if os.path.exists(DB_PATH):
-        return FAISS.load_local(DB_PATH, embeddings, allow_dangerous_deserialization=True)
+        return FAISS.load_local(
+            DB_PATH,
+            embeddings,
+            allow_dangerous_deserialization=True
+        )
 
     # Create new DB
     if texts:
@@ -72,12 +79,12 @@ def get_vectorstore(texts=None):
     return None
 
 # -------------------------
-# LOAD LLM
+# LOAD LLM (FIXED)
 # -------------------------
 @st.cache_resource
 def load_llm():
     pipe = pipeline(
-        "text2text-generation",
+        task="text-generation",  # ✅ FIXED
         model="google/flan-t5-base",
         max_length=512,
         temperature=0.2
@@ -88,7 +95,9 @@ def load_llm():
 # UI
 # -------------------------
 uploaded_files = st.file_uploader(
-    "Upload PDFs", type="pdf", accept_multiple_files=True
+    "Upload PDFs",
+    type="pdf",
+    accept_multiple_files=True
 )
 
 # Process PDFs
@@ -110,11 +119,14 @@ if st.button("🧹 Clear Chat"):
 # CHAT SYSTEM
 # -------------------------
 if st.session_state.vectorstore is not None:
+
     llm = load_llm()
 
     qa_chain = ConversationalRetrievalChain.from_llm(
         llm,
-        retriever=st.session_state.vectorstore.as_retriever(),
+        retriever=st.session_state.vectorstore.as_retriever(
+            search_kwargs={"k": 3}
+        ),
         return_source_documents=True
     )
 
@@ -143,7 +155,6 @@ for item in st.session_state.chat_history:
     st.chat_message("user").write(question)
     st.chat_message("assistant").write(answer)
 
-    # Show sources
     with st.expander("📚 Sources"):
         for i, doc in enumerate(sources):
             st.write(f"**Source {i+1}:**")
